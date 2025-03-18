@@ -17,7 +17,6 @@ record Dependency(String jarName, String jarUrl) {
     Path getJarPath() {
         return LIB_DIR.resolve(jarName);
     }
-
     URI getJarUri() {
         return URI.create(jarUrl);
     }
@@ -33,20 +32,24 @@ final Map<String, Dependency> DEPENDENCIES = Map.of(
     new Dependency(
         "openai-java-0.26.1.jar",
         "https://repo1.maven.org/maven2/com/openai/openai-java/0.26.1/openai-java-0.26.1.jar"
+    ),
+    "langchain4j",
+    new Dependency(
+        "langchain4j-open-ai-1.0.0-beta2.jar",
+        "https://repo1.maven.org/maven2/dev/langchain4j/langchain4j-open-ai/1.0.0-beta2/langchain4j-open-ai-1.0.0-beta2.jar"
     )
 );
 
 void main(String[] args) throws Exception {
     if (args.length == 0) {
-        all();
-        return;
+        System.err.println("Expect target: install, build, test, run");
+        System.exit(1);
     }
-
     switch (args[0]) {
-        case "deps" -> deps();
-        case "tests-build" -> testsBuild();
-        case "tests-run" -> testsRun();
-        case "all" -> all();
+        case "install" -> installCmd();
+        case "build" -> buildCmd();
+        case "test" -> testCmd();
+        case "run" -> runCmd();
         default -> {
             System.err.println("Unknown target: " + args[0]);
             System.exit(1);
@@ -54,11 +57,7 @@ void main(String[] args) throws Exception {
     }
 }
 
-void all() throws Exception {
-    testsRun();
-}
-
-void deps() throws Exception {
+void installCmd() throws Exception {
     Files.createDirectories(LIB_DIR);
     for (Dependency dep : DEPENDENCIES.values()) {
         if (Files.notExists(dep.getJarPath())) {
@@ -67,15 +66,32 @@ void deps() throws Exception {
     }
 }
 
-void testsBuild() throws Exception {
-    deps();
+void buildCmd() throws Exception {
+    installCmd();
     cleanBuildDir();
     compileJavaSources();
 }
 
-void testsRun() throws Exception {
-    testsBuild();
-    runTests();
+void testCmd() throws Exception {
+    buildCmd();
+    executeCommand(
+        List.of(
+            "java",
+            "-jar",
+            DEPENDENCIES.get("junit").getJarPath().toString(),
+            "execute",
+            "--classpath",
+            buildClassPath(),
+            "--scan-classpath"
+        )
+    );
+}
+
+void runCmd() throws Exception {
+    buildCmd();
+    executeCommand(
+        List.of("java", "-cp", buildClassPath(), "butvinm.lab0.task0.App")
+    );
 }
 
 void downloadJar(Dependency dep) throws IOException {
@@ -98,16 +114,19 @@ void compileJavaSources() throws IOException, InterruptedException {
     if (javaFiles.isEmpty()) {
         throw new RuntimeException("No Java files found in source directories");
     }
+    String classpath = DEPENDENCIES.values()
+        .stream()
+        .map(dep -> dep.getJarPath().toString())
+        .collect(Collectors.joining(File.pathSeparator));
 
     List<String> command = new ArrayList<>();
     command.add("javac");
     command.add("-cp");
-    command.add(DEPENDENCIES.get("junit").getJarPath().toString());
+    command.add(classpath);
     command.add("-d");
     command.add(BUILD_DIR.toString());
     command.add("-Xlint:unchecked");
     javaFiles.forEach(path -> command.add(path.toString()));
-
     executeCommand(command);
 }
 
@@ -125,18 +144,15 @@ List<Path> findJavaFiles() throws IOException {
         .collect(Collectors.toList());
 }
 
-void runTests() throws IOException, InterruptedException {
-    List<String> command = List.of(
-        "java",
-        "-jar",
-        DEPENDENCIES.get("junit").getJarPath().toString(),
-        "execute",
-        "--classpath",
-        BUILD_DIR.toString(),
-        "--scan-classpath"
+String buildClassPath() {
+    return (
+        BUILD_DIR +
+        File.pathSeparator +
+        DEPENDENCIES.values()
+            .stream()
+            .map(dep -> dep.getJarPath().toString())
+            .collect(Collectors.joining(File.pathSeparator))
     );
-
-    executeCommand(command);
 }
 
 void executeCommand(List<String> command)
