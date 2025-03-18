@@ -13,92 +13,63 @@ static final List<Path> SOURCE_DIRS = List.of(
     Paths.get("tests")
 );
 
-record Dependency(
-    String jarName,
-    String jarUrl,
-    List<Dependency> dependencies
-) {
-    public Dependency(String jarName, String jarUrl) {
-        this(jarName, jarUrl, List.of());
-    }
-
-    Path getJarPath() {
-        return LIB_DIR.resolve(jarName);
-    }
-    URI getJarUri() {
-        return URI.create(jarUrl);
-    }
-}
+static final String LANGCHAIN4J_VERSION = "1.0.0-beta2";
 
 final Map<String, Dependency> DEPENDENCIES = Map.of(
     "junit",
     new Dependency(
-        "junit-platform-console-standalone-1.12.0-RC1.jar",
-        "https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.12.0-RC1/junit-platform-console-standalone-1.12.0-RC1.jar"
+        "org.junit.platform",
+        "junit-platform-console-standalone",
+        "1.12.0-RC1"
     ),
     "openai",
-    new Dependency(
-        "openai-java-0.26.1.jar",
-        "https://repo1.maven.org/maven2/com/openai/openai-java/0.26.1/openai-java-0.26.1.jar"
-    ),
+    new Dependency("com.openai", "openai-java", "0.26.1"),
     "langchain4j",
     new Dependency(
-        "langchain4j-1.0.0-beta2.jar",
-        "https://repo1.maven.org/maven2/dev/langchain4j/langchain4j/1.0.0-beta2/langchain4j-1.0.0-beta2.jar",
-        List.of(
+        "dev.langchain4j",
+        "langchain4j",
+        LANGCHAIN4J_VERSION,
+        new Dependency(
+            "dev.langchain4j",
+            "langchain4j-http-client-jdk",
+            LANGCHAIN4J_VERSION,
             new Dependency(
-                "langchain4j-core-1.0.0-beta2.jar",
-                "https://repo1.maven.org/maven2/dev/langchain4j/langchain4j-core/1.0.0-beta2/langchain4j-core-1.0.0-beta2.jar",
-                List.of(
-                    new Dependency(
-                        "jackson-databind-2.18.3.jar",
-                        "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.18.3/jackson-databind-2.18.3.jar",
-                        List.of(
-                            new Dependency(
-                                "jackson-core-2.18.3.jar",
-                                "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-core/2.18.3/jackson-core-2.18.3.jar"
-                            ),
-                            new Dependency(
-                                "jackson-core-2.18.3.jar",
-                                "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-core/2.18.3/jackson-core-2.18.3.jar"
-                            ),
-                            new Dependency(
-                                "jackson-annotations-2.18.3.jar",
-                                "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.18.3/jackson-annotations-2.18.3.jar"
-                            )
-                        )
-                    ),
-                    new Dependency(
-                        "slf4j-api-2.1.0-alpha1.jar",
-                        "https://repo1.maven.org/maven2/org/slf4j/slf4j-api/2.1.0-alpha1/slf4j-api-2.1.0-alpha1.jar"
-                    )
-                )
-            ),
-            new Dependency(
-                "langchain4j-http-client-jdk-1.0.0-beta2.jar",
-                "https://repo1.maven.org/maven2/dev/langchain4j/langchain4j-http-client-jdk/1.0.0-beta2/langchain4j-http-client-jdk-1.0.0-beta2.jar",
-                List.of(
-                    new Dependency(
-                        "langchain4j-http-client-1.0.0-beta2.jar",
-                        "https://repo1.maven.org/maven2/dev/langchain4j/langchain4j-http-client/1.0.0-beta2/langchain4j-http-client-1.0.0-beta2.jar"
-                    )
-                )
+                "dev.langchain4j",
+                "langchain4j-http-client",
+                LANGCHAIN4J_VERSION
             )
         )
+    ),
+    "langchain4j-core",
+    new Dependency(
+        "dev.langchain4j",
+        "langchain4j-core",
+        LANGCHAIN4J_VERSION,
+        new Dependency(
+            "com.fasterxml.jackson.core",
+            "jackson-databind",
+            "2.18.3",
+            new Dependency(
+                "com.fasterxml.jackson.core",
+                "jackson-core",
+                "2.18.3"
+            ),
+            new Dependency(
+                "com.fasterxml.jackson.core",
+                "jackson-annotations",
+                "2.18.3"
+            )
+        ),
+        new Dependency("org.slf4j", "slf4j-api", "2.1.0-alpha1")
     ),
     "langchain4j-openai",
     new Dependency(
-        "langchain4j-open-ai-1.0.0-beta2.jar",
-        "https://repo1.maven.org/maven2/dev/langchain4j/langchain4j-open-ai/1.0.0-beta2/langchain4j-open-ai-1.0.0-beta2.jar",
-        List.of(
-            new Dependency(
-                "jtokkit-1.1.0.jar",
-                "https://repo1.maven.org/maven2/com/knuddels/jtokkit/1.1.0/jtokkit-1.1.0.jar"
-            )
-        )
+        "dev.langchain4j",
+        "langchain4j-open-ai",
+        LANGCHAIN4J_VERSION,
+        new Dependency("com.knuddels", "jtokkit", "1.1.0")
     )
 );
-
 
 void main(String[] args) throws Exception {
     if (args.length == 0) {
@@ -111,7 +82,7 @@ void main(String[] args) throws Exception {
         case "test" -> testCmd();
         case "run" -> runCmd();
         default -> {
-            System.err.println("Unknown target: " + args[0]);
+            System.err.println("Unknown target: %s".formatted(args[0]));
             System.exit(1);
         }
     }
@@ -152,13 +123,58 @@ void runCmd() throws Exception {
     );
 }
 
+record Dependency(
+    String groupId,
+    String artifactId,
+    String version,
+    List<Dependency> dependencies
+) {
+    private static final String REPOSITORY = "https://repo1.maven.org/maven2";
+
+    public Dependency(
+        String groupId,
+        String artifactId,
+        String version,
+        Dependency... dependencies
+    ) {
+        this(groupId, artifactId, version, Arrays.asList(dependencies));
+    }
+
+    public Dependency(String groupId, String artifactId, String version) {
+        this(groupId, artifactId, version, List.of());
+    }
+
+    String getJarName() {
+        return String.format("%s-%s.jar", artifactId, version);
+    }
+
+    String getJarUrl() {
+        return String.format(
+            "%s/%s/%s/%s/%s",
+            REPOSITORY,
+            groupId.replace(".", "/"),
+            artifactId,
+            version,
+            getJarName()
+        );
+    }
+
+    Path getJarPath() {
+        return LIB_DIR.resolve(getJarName());
+    }
+
+    URI getJarUri() {
+        return URI.create(getJarUrl());
+    }
+}
+
 void installDependency(Dependency dep) throws Exception {
-    System.out.println("Installing " + dep.getJarPath());
+    System.out.print("Installing %s: ".formatted(dep.getJarPath()));
     if (Files.notExists(dep.getJarPath())) {
-        System.out.println("Downloading jar " + dep.getJarUri());
+        System.out.println("Downloading jar %s".formatted(dep.getJarUri()));
         downloadJar(dep);
     } else {
-        System.out.println(dep.getJarPath() + " already exists");
+        System.out.println("Installed");
     }
     for (Dependency transitiveDep : dep.dependencies()) {
         installDependency(transitiveDep);
@@ -233,12 +249,14 @@ void addDependencyToClasspath(Dependency dep, Set<Path> classpathEntries) {
 
 void executeCommand(List<String> command)
     throws IOException, InterruptedException {
-    System.out.println(command.stream().collect(Collectors.joining(" ")));
+    System.out.println(
+        "Execute command: %s".formatted(command.stream().collect(Collectors.joining(" ")))
+    );
     Process process = new ProcessBuilder(command).inheritIO().start();
     int exitCode = process.waitFor();
     if (exitCode != 0) {
         throw new RuntimeException(
-            "Command failed with exit code: " + exitCode
+            "Command failed with exit code: %d".formatted(exitCode)
         );
     }
 }
