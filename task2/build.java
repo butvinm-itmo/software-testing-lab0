@@ -13,7 +13,15 @@ static final List<Path> SOURCE_DIRS = List.of(
     Paths.get("tests")
 );
 
-record Dependency(String jarName, String jarUrl) {
+record Dependency(
+    String jarName,
+    String jarUrl,
+    List<Dependency> dependencies
+) {
+    public Dependency(String jarName, String jarUrl) {
+        this(jarName, jarUrl, List.of());
+    }
+
     Path getJarPath() {
         return LIB_DIR.resolve(jarName);
     }
@@ -35,10 +43,62 @@ final Map<String, Dependency> DEPENDENCIES = Map.of(
     ),
     "langchain4j",
     new Dependency(
+        "langchain4j-1.0.0-beta2.jar",
+        "https://repo1.maven.org/maven2/dev/langchain4j/langchain4j/1.0.0-beta2/langchain4j-1.0.0-beta2.jar",
+        List.of(
+            new Dependency(
+                "langchain4j-core-1.0.0-beta2.jar",
+                "https://repo1.maven.org/maven2/dev/langchain4j/langchain4j-core/1.0.0-beta2/langchain4j-core-1.0.0-beta2.jar",
+                List.of(
+                    new Dependency(
+                        "jackson-databind-2.18.3.jar",
+                        "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.18.3/jackson-databind-2.18.3.jar",
+                        List.of(
+                            new Dependency(
+                                "jackson-core-2.18.3.jar",
+                                "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-core/2.18.3/jackson-core-2.18.3.jar"
+                            ),
+                            new Dependency(
+                                "jackson-core-2.18.3.jar",
+                                "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-core/2.18.3/jackson-core-2.18.3.jar"
+                            ),
+                            new Dependency(
+                                "jackson-annotations-2.18.3.jar",
+                                "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.18.3/jackson-annotations-2.18.3.jar"
+                            )
+                        )
+                    ),
+                    new Dependency(
+                        "slf4j-api-2.1.0-alpha1.jar",
+                        "https://repo1.maven.org/maven2/org/slf4j/slf4j-api/2.1.0-alpha1/slf4j-api-2.1.0-alpha1.jar"
+                    )
+                )
+            ),
+            new Dependency(
+                "langchain4j-http-client-jdk-1.0.0-beta2.jar",
+                "https://repo1.maven.org/maven2/dev/langchain4j/langchain4j-http-client-jdk/1.0.0-beta2/langchain4j-http-client-jdk-1.0.0-beta2.jar",
+                List.of(
+                    new Dependency(
+                        "langchain4j-http-client-1.0.0-beta2.jar",
+                        "https://repo1.maven.org/maven2/dev/langchain4j/langchain4j-http-client/1.0.0-beta2/langchain4j-http-client-1.0.0-beta2.jar"
+                    )
+                )
+            )
+        )
+    ),
+    "langchain4j-openai",
+    new Dependency(
         "langchain4j-open-ai-1.0.0-beta2.jar",
-        "https://repo1.maven.org/maven2/dev/langchain4j/langchain4j-open-ai/1.0.0-beta2/langchain4j-open-ai-1.0.0-beta2.jar"
+        "https://repo1.maven.org/maven2/dev/langchain4j/langchain4j-open-ai/1.0.0-beta2/langchain4j-open-ai-1.0.0-beta2.jar",
+        List.of(
+            new Dependency(
+                "jtokkit-1.1.0.jar",
+                "https://repo1.maven.org/maven2/com/knuddels/jtokkit/1.1.0/jtokkit-1.1.0.jar"
+            )
+        )
     )
 );
+
 
 void main(String[] args) throws Exception {
     if (args.length == 0) {
@@ -60,9 +120,7 @@ void main(String[] args) throws Exception {
 void installCmd() throws Exception {
     Files.createDirectories(LIB_DIR);
     for (Dependency dep : DEPENDENCIES.values()) {
-        if (Files.notExists(dep.getJarPath())) {
-            downloadJar(dep);
-        }
+        installDependency(dep);
     }
 }
 
@@ -94,6 +152,19 @@ void runCmd() throws Exception {
     );
 }
 
+void installDependency(Dependency dep) throws Exception {
+    System.out.println("Installing " + dep.getJarPath());
+    if (Files.notExists(dep.getJarPath())) {
+        System.out.println("Downloading jar " + dep.getJarUri());
+        downloadJar(dep);
+    } else {
+        System.out.println(dep.getJarPath() + " already exists");
+    }
+    for (Dependency transitiveDep : dep.dependencies()) {
+        installDependency(transitiveDep);
+    }
+}
+
 void downloadJar(Dependency dep) throws IOException {
     try (InputStream in = dep.getJarUri().toURL().openStream()) {
         Files.copy(in, dep.getJarPath());
@@ -114,10 +185,7 @@ void compileJavaSources() throws IOException, InterruptedException {
     if (javaFiles.isEmpty()) {
         throw new RuntimeException("No Java files found in source directories");
     }
-    String classpath = DEPENDENCIES.values()
-        .stream()
-        .map(dep -> dep.getJarPath().toString())
-        .collect(Collectors.joining(File.pathSeparator));
+    String classpath = buildClassPath();
 
     List<String> command = new ArrayList<>();
     command.add("javac");
@@ -145,18 +213,27 @@ List<Path> findJavaFiles() throws IOException {
 }
 
 String buildClassPath() {
-    return (
-        BUILD_DIR +
-        File.pathSeparator +
-        DEPENDENCIES.values()
-            .stream()
-            .map(dep -> dep.getJarPath().toString())
-            .collect(Collectors.joining(File.pathSeparator))
-    );
+    Set<Path> classpathEntries = new LinkedHashSet<>();
+    classpathEntries.add(BUILD_DIR);
+    for (Dependency dep : DEPENDENCIES.values()) {
+        addDependencyToClasspath(dep, classpathEntries);
+    }
+    return classpathEntries
+        .stream()
+        .map(Path::toString)
+        .collect(Collectors.joining(File.pathSeparator));
+}
+
+void addDependencyToClasspath(Dependency dep, Set<Path> classpathEntries) {
+    classpathEntries.add(dep.getJarPath());
+    for (Dependency transitiveDep : dep.dependencies()) {
+        addDependencyToClasspath(transitiveDep, classpathEntries);
+    }
 }
 
 void executeCommand(List<String> command)
     throws IOException, InterruptedException {
+    System.out.println(command.stream().collect(Collectors.joining(" ")));
     Process process = new ProcessBuilder(command).inheritIO().start();
     int exitCode = process.waitFor();
     if (exitCode != 0) {
