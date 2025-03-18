@@ -4,3 +4,53 @@
 
 Последнее отчаянное воззвание дельфинов показалось людям удивительно сложным двойным сальто через обруч с одновременным высвистыванием “Звездно-полосатого флага”. В действительности же, сообщение гласило: “Пока! И спасибо за рыбу”.
 
+// #!/usr/bin/env -S java --enable-preview --source 21
+
+
+
+Дельфины
+
+Люди
+
+Вагоны
+
+
+> интеллект человека выше интеллекта дельфина
+
+> создал столько всяких полезных вещей – колесо, Нью-Йорк, войны и т.д.
+
+> прохлаждались в воде
+
+> попытки контакта ... интерпретировались
+
+
+Certainly! Let’s venture into the **avant-garde and experimental corners of testing**, where academia, industry, and pure mischief collide. Here are some unconventional ideas to reignite your curiosity:
+
+
+### **Existential Testing**  
+   - **What?** Ask meta-questions about the system’s purpose.  
+   - **Example Tests**:  
+     - If the system vanished, would anyone notice?  
+     - Does the codebase contain more test logic than business logic?  
+     - Is the system’s complexity fractal? (Zoom into any module, and it’s just as complicated as the whole.)  
+   - **Tool**: A whiskey bottle and late-night existential dread.  
+
+### **Animal Testing** 🐾  
+   - **What?** Use pets or untrained humans (e.g., toddlers) to interact with your UI.  
+   - **Why?** Uncovers usability flaws that logical humans would never find.  
+   - **How:**  
+     - Let a cat walk on a keyboard during a live demo.  
+     - Hand your app to a toddler and see which buttons they mash.  
+   - **Weird Angle:** Publish a "Cat-Driven Development" blog post.  
+
+### **The "IKEA Manual" Test** 🛠️  
+   - **What?** Remove all text/copy from your UI, leaving only icons and diagrams.  
+   - **Goal:** Can users navigate your app like they’d assemble a KALLAX shelf?  
+   - **Real Value:** Tests visual intuition and accessibility.  
+
+### **Haunted Code Testing** 👻  
+   - **What?** Seed your codebase with "ghost code"—functionality that does nothing but looks scary.  
+   - **Examples:**  
+     - Add a `checkForCurse()` method that randomly logs "🔮".  
+     - Write comments in Latin from "The Exorcist."  
+   - **Goal:** See if future developers notice (or fear to remove it).  

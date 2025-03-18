@@ -1,4 +1,4 @@
-package butvinm.lab0;
+package butvinm.lab0.task0;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
