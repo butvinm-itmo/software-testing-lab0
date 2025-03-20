@@ -2,76 +2,62 @@ import java.io.*;
 import java.net.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.*;
 
-static final Path LIB_DIR = Paths.get("lib");
+final Path LIB_DIR = Paths.get("lib");
 
-static final Path BUILD_DIR = Paths.get("target");
+final Path BUILD_DIR = Paths.get("target");
 
-static final List<Path> SOURCE_DIRS = List.of(
-    Paths.get("src"),
-    Paths.get("tests")
-);
+final Path SOURCE_DIR = Paths.get("src");
 
-static final String LANGCHAIN4J_VERSION = "1.0.0-beta2";
+final Path TEST_DIR = Paths.get("tests");
+
+final String LANGCHAIN4J_VERSION = "1.0.0-beta2";
+
+final DependencyManager dm = new DependencyManager(LIB_DIR, "https://repo1.maven.org/maven2");
 
 final Map<String, Dependency> DEPENDENCIES = Map.of(
     "junit",
-    new Dependency(
-        "org.junit.platform",
-        "junit-platform-console-standalone",
-        "1.12.0-RC1"
+    dm.fromMaven("org.junit.platform", "junit-platform-console-standalone", "1.12.0-RC1"),
+    "checkstyle",
+    dm.fromUrl(
+        "checkstyle-10.21.3-all.jar",
+        "https://github.com/checkstyle/checkstyle/releases/download/checkstyle-10.21.3/checkstyle-10.21.3-all.jar"
     ),
-    "openai",
-    new Dependency("com.openai", "openai-java", "0.26.1"),
     "langchain4j",
-    new Dependency(
+    dm.fromMaven(
         "dev.langchain4j",
         "langchain4j",
         LANGCHAIN4J_VERSION,
-        new Dependency(
+        dm.fromMaven(
             "dev.langchain4j",
             "langchain4j-http-client-jdk",
             LANGCHAIN4J_VERSION,
-            new Dependency(
-                "dev.langchain4j",
-                "langchain4j-http-client",
-                LANGCHAIN4J_VERSION
-            )
+            dm.fromMaven("dev.langchain4j", "langchain4j-http-client", LANGCHAIN4J_VERSION)
         )
     ),
     "langchain4j-core",
-    new Dependency(
+    dm.fromMaven(
         "dev.langchain4j",
         "langchain4j-core",
         LANGCHAIN4J_VERSION,
-        new Dependency(
+        dm.fromMaven(
             "com.fasterxml.jackson.core",
             "jackson-databind",
             "2.18.3",
-            new Dependency(
-                "com.fasterxml.jackson.core",
-                "jackson-core",
-                "2.18.3"
-            ),
-            new Dependency(
-                "com.fasterxml.jackson.core",
-                "jackson-annotations",
-                "2.18.3"
-            )
+            dm.fromMaven("com.fasterxml.jackson.core", "jackson-core", "2.18.3"),
+            dm.fromMaven("com.fasterxml.jackson.core", "jackson-annotations", "2.18.3")
         ),
-        new Dependency("org.slf4j", "slf4j-api", "2.1.0-alpha1")
+        dm.fromMaven("org.slf4j", "slf4j-api", "2.1.0-alpha1")
     ),
     "langchain4j-openai",
-    new Dependency(
-        "dev.langchain4j",
-        "langchain4j-open-ai",
-        LANGCHAIN4J_VERSION,
-        new Dependency("com.knuddels", "jtokkit", "1.1.0")
-    )
+    dm.fromMaven("dev.langchain4j", "langchain4j-open-ai", LANGCHAIN4J_VERSION, dm.fromMaven("com.knuddels", "jtokkit", "1.1.0"))
 );
 
-void main(String[] args) throws Exception {
+// static final String CLASSPATH = buildClassPath(BUILD_DIR, DEPENDENCIES.values());
+
+void main(String... args) throws Exception {
     if (args.length == 0) {
         System.err.println("Expect target: install, build, test, run");
         System.exit(1);
@@ -80,6 +66,7 @@ void main(String[] args) throws Exception {
         case "install" -> installCmd();
         case "build" -> buildCmd();
         case "test" -> testCmd();
+        case "lint" -> lintCmd();
         case "run" -> runCmd();
         default -> {
             System.err.println("Unknown target: %s".formatted(args[0]));
@@ -90,173 +77,166 @@ void main(String[] args) throws Exception {
 
 void installCmd() throws Exception {
     Files.createDirectories(LIB_DIR);
-    for (Dependency dep : DEPENDENCIES.values()) {
-        installDependency(dep);
-    }
+    DEPENDENCIES.values().forEach(dep -> pohui(() -> dm.installDependency(dep, true)));
 }
 
 void buildCmd() throws Exception {
     installCmd();
-    cleanBuildDir();
-    compileJavaSources();
+    cleanDir(BUILD_DIR);
+    compileJavaSources(SOURCE_DIR, DEPENDENCIES.values(), BUILD_DIR);
+    compileJavaSources(TEST_DIR, DEPENDENCIES.values(), BUILD_DIR);
 }
 
 void testCmd() throws Exception {
     buildCmd();
-    executeCommand(
-        List.of(
-            "java",
-            "-jar",
-            DEPENDENCIES.get("junit").getJarPath().toString(),
-            "execute",
-            "--classpath",
-            buildClassPath(),
-            "--scan-classpath"
-        )
+    cmd(
+        "java",
+        "-jar",
+        DEPENDENCIES.get("junit").jarPath().toString(),
+        "execute",
+        "--classpath",
+        buildClassPath(BUILD_DIR, DEPENDENCIES.values()),
+        "--scan-classpath"
     );
+}
+
+void lintCmd() throws Exception {
+    buildCmd();
+    var command = commands("java", "-jar", DEPENDENCIES.get("checkstyle").jarPath().toString(), "-c", "checkstyle.xml", "--debug");
+    command.addAll(findJavaFiles(SOURCE_DIR).stream().map(Path::toString).toList());
+    command.addAll(findJavaFiles(TEST_DIR).stream().map(Path::toString).toList());
+    cmd(command);
 }
 
 void runCmd() throws Exception {
     buildCmd();
-    executeCommand(
-        List.of("java", "-cp", buildClassPath(), "butvinm.lab0.task0.App")
-    );
+    cmd("java", "-cp", buildClassPath(BUILD_DIR, DEPENDENCIES.values()), "butvinm.lab0.task0.App");
 }
 
-record Dependency(
-    String groupId,
-    String artifactId,
-    String version,
-    List<Dependency> dependencies
-) {
-    private static final String REPOSITORY = "https://repo1.maven.org/maven2";
+// Build library
+void cmd(Object... command) throws IOException, InterruptedException {
+    cmd(Arrays.asList(command));
+}
 
-    public Dependency(
-        String groupId,
-        String artifactId,
-        String version,
-        Dependency... dependencies
-    ) {
-        this(groupId, artifactId, version, Arrays.asList(dependencies));
-    }
+void cmd(List<Object> command) throws IOException, InterruptedException {
+    var args = command.stream().map(Object::toString).toList();
 
-    public Dependency(String groupId, String artifactId, String version) {
-        this(groupId, artifactId, version, List.of());
-    }
+    System.out.println("Execute command: %s".formatted(String.join(" ", args)));
 
-    String getJarName() {
-        return String.format("%s-%s.jar", artifactId, version);
-    }
-
-    String getJarUrl() {
-        return String.format(
-            "%s/%s/%s/%s/%s",
-            REPOSITORY,
-            groupId.replace(".", "/"),
-            artifactId,
-            version,
-            getJarName()
-        );
-    }
-
-    Path getJarPath() {
-        return LIB_DIR.resolve(getJarName());
-    }
-
-    URI getJarUri() {
-        return URI.create(getJarUrl());
+    var process = new ProcessBuilder(args).inheritIO().start();
+    var exitCode = process.waitFor();
+    if (exitCode != 0) {
+        System.err.println("Command failed with exit code: %d".formatted(exitCode));
+        System.exit(exitCode);
     }
 }
 
-void installDependency(Dependency dep) throws Exception {
-    System.out.print("Installing %s: ".formatted(dep.getJarPath()));
-    if (Files.notExists(dep.getJarPath())) {
-        System.out.println("Downloading jar %s".formatted(dep.getJarUri()));
-        downloadJar(dep);
-    } else {
-        System.out.println("Installed");
+ArrayList<Object> commands(Object... items) {
+    return new ArrayList<Object>(List.of(items));
+}
+
+record Dependency(String jarName, Path jarPath, URI jarUri, List<Dependency> subDependencies) {}
+
+class DependencyManager {
+
+    final Path libDir;
+    final String registry;
+
+    public DependencyManager(Path libDir, String registry) {
+        this.libDir = libDir;
+        this.registry = registry;
     }
-    for (Dependency transitiveDep : dep.dependencies()) {
-        installDependency(transitiveDep);
+
+    public Dependency fromUrl(String jarName, String jarUrl, Dependency... subDependencies) {
+        var jarPath = this.libDir.resolve(jarName);
+        var jarUri = URI.create(jarUrl);
+        return new Dependency(jarName, jarPath, jarUri, Arrays.asList(subDependencies));
+    }
+
+    public Dependency fromMaven(String groupId, String artifactId, String version, Dependency... subDependencies) {
+        var jarName = String.format("%s-%s.jar", artifactId, version);
+        var jarPath = this.libDir.resolve(jarName);
+        var jarUrl = String.format("%s/%s/%s/%s/%s", this.registry, groupId.replace(".", "/"), artifactId, version, jarName);
+        var jarUri = URI.create(jarUrl);
+        return new Dependency(jarName, this.libDir.resolve(jarName), jarUri, Arrays.asList(subDependencies));
+    }
+
+    void installDependency(Dependency dep, boolean verbose) throws Exception {
+        if (Files.notExists(dep.jarPath())) {
+            if (verbose) System.out.println("Downloading jar %s".formatted(dep.jarUri()));
+            downloadJar(dep);
+        }
+        if (verbose) System.out.println("Installed %s".formatted(dep.jarName()));
+        dep.subDependencies().stream().forEach(sub -> pohui(() -> installDependency(sub, verbose)));
+    }
+
+    void downloadJar(Dependency dep) throws IOException {
+        try (InputStream in = dep.jarUri().toURL().openStream()) {
+            Files.copy(in, dep.jarPath());
+        }
     }
 }
 
-void downloadJar(Dependency dep) throws IOException {
-    try (InputStream in = dep.getJarUri().toURL().openStream()) {
-        Files.copy(in, dep.getJarPath());
+void cleanDir(Path dir) throws IOException {
+    if (Files.exists(dir)) {
+        Files.walk(dir).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
     }
 }
 
-void cleanBuildDir() throws IOException {
-    if (Files.exists(BUILD_DIR)) {
-        Files.walk(BUILD_DIR)
-            .sorted(Comparator.reverseOrder())
-            .map(Path::toFile)
-            .forEach(File::delete);
-    }
-}
-
-void compileJavaSources() throws IOException, InterruptedException {
-    List<Path> javaFiles = findJavaFiles();
+void compileJavaSources(Path sourceDir, Collection<Dependency> dependencies, Path buildDir) throws IOException, InterruptedException {
+    var javaFiles = findJavaFiles(sourceDir);
     if (javaFiles.isEmpty()) {
         throw new RuntimeException("No Java files found in source directories");
     }
-    String classpath = buildClassPath();
+    var classpath = buildClassPath(buildDir, dependencies);
 
-    List<String> command = new ArrayList<>();
-    command.add("javac");
-    command.add("-cp");
-    command.add(classpath);
-    command.add("-d");
-    command.add(BUILD_DIR.toString());
-    command.add("-Xlint:unchecked");
-    javaFiles.forEach(path -> command.add(path.toString()));
-    executeCommand(command);
+    var command = commands("javac", "-cp", classpath, "-d", buildDir, "-Xlint:unchecked");
+    command.addAll(javaFiles);
+    cmd(command);
 }
 
-List<Path> findJavaFiles() throws IOException {
-    return SOURCE_DIRS.stream()
-        .filter(Files::exists)
-        .flatMap(dir -> {
-            try {
-                return Files.walk(dir);
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-        })
-        .filter(path -> path.toString().endsWith(".java"))
-        .collect(Collectors.toList());
+List<Path> findJavaFiles(Path sourceDir) throws IOException {
+    return Files.walk(sourceDir).filter(path -> path.toString().endsWith(".java")).toList();
 }
 
-String buildClassPath() {
-    Set<Path> classpathEntries = new LinkedHashSet<>();
-    classpathEntries.add(BUILD_DIR);
-    for (Dependency dep : DEPENDENCIES.values()) {
-        addDependencyToClasspath(dep, classpathEntries);
-    }
-    return classpathEntries
-        .stream()
-        .map(Path::toString)
-        .collect(Collectors.joining(File.pathSeparator));
+String buildClassPath(Path buildDir, Collection<Dependency> dependencies) {
+    var classpathEntries = new LinkedHashSet<Path>();
+    classpathEntries.add(buildDir);
+    dependencies.stream().forEach(dep -> addDependencyToClasspath(dep, classpathEntries));
+    return classpathEntries.stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator));
 }
 
 void addDependencyToClasspath(Dependency dep, Set<Path> classpathEntries) {
-    classpathEntries.add(dep.getJarPath());
-    for (Dependency transitiveDep : dep.dependencies()) {
-        addDependencyToClasspath(transitiveDep, classpathEntries);
-    }
+    classpathEntries.add(dep.jarPath());
+    dep.subDependencies().stream().forEach(sub -> addDependencyToClasspath(sub, classpathEntries));
 }
 
-void executeCommand(List<String> command)
-    throws IOException, InterruptedException {
-    System.out.println(
-        "Execute command: %s".formatted(command.stream().collect(Collectors.joining(" ")))
-    );
-    Process process = new ProcessBuilder(command).inheritIO().start();
-    int exitCode = process.waitFor();
-    if (exitCode != 0) {
-        throw new RuntimeException(
-            "Command failed with exit code: %d".formatted(exitCode)
-        );
-    }
+@FunctionalInterface
+interface UnsafeSupplier<R> {
+    R produce() throws Exception;
+}
+
+@FunctionalInterface
+interface UnsafeRunnable {
+    void run() throws Exception;
+}
+
+<R> Supplier<R> pohui(UnsafeSupplier<R> func) {
+    return () -> {
+        try {
+            return func.produce();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    };
+}
+
+Runnable pohui(UnsafeRunnable func) {
+    return () -> {
+        try {
+            func.run();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    };
 }
