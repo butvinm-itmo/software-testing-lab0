@@ -1,8 +1,16 @@
-import java.util.Arrays;
-
 final Path LIB_DIR = Paths.get("lib");
 
-final Path BUILD_DIR = Paths.get("target");
+final Path TARGET_DIR = Paths.get("target");
+
+final Path CLASSES_DIR = TARGET_DIR.resolve("classes");
+
+final Path TEST_CLASSES_DIR = TARGET_DIR.resolve("test-classes");
+
+final Path INSTRUCTED_DIR = TARGET_DIR.resolve("instructed");
+
+final List<Path> CP_DIRS = List.of(CLASSES_DIR, TEST_CLASSES_DIR, INSTRUCTED_DIR);
+
+final Path COVERAGE_REPORT_DIR = TARGET_DIR.resolve("coverage-report");
 
 final Path SOURCE_DIR = Paths.get("src");
 
@@ -17,6 +25,10 @@ final String JACKSON_VERSION = "2.18.3";
 final Map<String, Dependency> DEPENDENCIES = Map.of(
     "junit",
     dm.fromMaven("org.junit.platform", "junit-platform-console-standalone", "1.12.0-RC1"),
+    "jacoco",
+    dm.fromMaven("org.jacoco", "org.jacoco.cli", "0.8.13", "nodeps"),
+    "jacoco-agent",
+    dm.fromMaven("org.jacoco", "org.jacoco.agent", "0.8.13", "runtime", dm.fromMaven("org.jacoco", "org.jacoco.agent", "0.8.13")),
     "checkstyle",
     dm.fromUrl(
         "checkstyle-10.21.3-all.jar",
@@ -85,21 +97,61 @@ void installCmd() throws Exception {
 
 void buildCmd() throws Exception {
     installCmd();
-    cleanDir(BUILD_DIR);
-    compileJavaSources(SOURCE_DIR, DEPENDENCIES.values(), BUILD_DIR);
+    cleanDir(TARGET_DIR);
+    compileJavaSources(SOURCE_DIR.resolve("main"), DEPENDENCIES.values(), CP_DIRS, CLASSES_DIR);
+    compileJavaSources(SOURCE_DIR.resolve("test"), DEPENDENCIES.values(), CP_DIRS, TEST_CLASSES_DIR);
 }
 
 void testCmd() throws Exception {
     buildCmd();
+
+    cmd("java", "-jar", DEPENDENCIES.get("jacoco").jarPath(), "instrument", "--dest", INSTRUCTED_DIR);
+    // java -javaagent:lib/org.jacoco.agent-0.8.13.jar=destfile=target/jacoco.exec \
+    //      -cp "target/instrumented:target/classes:lib/*" \
+    //      org.junit.runner.JUnitCore com.example.TestClass  # Replace with your test class
+
+    var jacocoExecFile = TARGET_DIR.resolve("jacoco.exec");
+
+    cmd(
+        "java",
+        "-javaagent:%s=destfile=%s".formatted(DEPENDENCIES.get("jacoco-agent").jarPath(), jacocoExecFile),
+        "-cp",
+        buildClassPath(CP_DIRS, DEPENDENCIES.values()),
+        "-jar",
+        DEPENDENCIES.get("junit").jarPath(),
+        "execute",
+        "--classpath",
+        buildClassPath(CP_DIRS, DEPENDENCIES.values()),
+        "--scan-classpath"
+    );
+
+    // java -jar lib/org.jacoco.cli-0.8.13-nodeps.jar report target/jacoco.exec \
+    //      --classfiles target/classes \
+    //      --sourcefiles src/main/java \
+    //      --html target/report
+
     cmd(
         "java",
         "-jar",
-        DEPENDENCIES.get("junit").jarPath().toString(),
-        "execute",
-        "--classpath",
-        buildClassPath(BUILD_DIR, DEPENDENCIES.values()),
-        "--scan-classpath"
+        DEPENDENCIES.get("jacoco").jarPath(),
+        "report",
+        jacocoExecFile,
+        "--classfiles",
+        CLASSES_DIR,
+        "--sourcefiles",
+        SOURCE_DIR.resolve("main/java"),
+        "--html",
+        COVERAGE_REPORT_DIR
     );
+    // cmd(
+    //     "java",
+    //     "-jar",
+    //     DEPENDENCIES.get("junit").jarPath().toString(),
+    //     "execute",
+    //     "--classpath",
+    //     buildClassPath(CP_DIRS, DEPENDENCIES.values()),
+    //     "--scan-classpath"
+    // );
 }
 
 void lintCmd() throws Exception {
@@ -111,7 +163,7 @@ void lintCmd() throws Exception {
 
 void runCmd(List<String> args) throws Exception {
     buildCmd();
-    var command = commands("java", "--enable-preview", "-cp", buildClassPath(BUILD_DIR, DEPENDENCIES.values()), MAIN_CLASS);
+    var command = commands("java", "--enable-preview", "-cp", buildClassPath(CP_DIRS, DEPENDENCIES.values()), MAIN_CLASS);
     command.addAll(args);
     cmd(command);
 }
@@ -164,6 +216,14 @@ class DependencyManager {
         return new Dependency(jarName, jarPath, jarUri, Arrays.asList(subDependencies));
     }
 
+    public Dependency fromMaven(String groupId, String artifactId, String version, String modifier, Dependency... subDependencies) {
+        var jarName = String.format("%s-%s-%s.jar", artifactId, version, modifier);
+        var jarPath = this.libDir.resolve(jarName);
+        var jarUrl = String.format("%s/%s/%s/%s/%s", this.registry, groupId.replace(".", "/"), artifactId, version, jarName);
+        var jarUri = URI.create(jarUrl);
+        return new Dependency(jarName, jarPath, jarUri, Arrays.asList(subDependencies));
+    }
+
     void installDependency(Dependency dep, boolean verbose) throws Exception {
         if (Files.notExists(dep.jarPath())) {
             if (verbose) System.out.println("Downloading jar %s".formatted(dep.jarUri()));
@@ -186,12 +246,13 @@ void cleanDir(Path dir) throws IOException {
     }
 }
 
-void compileJavaSources(Path sourceDir, Collection<Dependency> dependencies, Path buildDir) throws IOException, InterruptedException {
+void compileJavaSources(Path sourceDir, Collection<Dependency> dependencies, List<Path> cpDirs, Path buildDir)
+    throws IOException, InterruptedException {
     var javaFiles = findJavaFiles(sourceDir);
     if (javaFiles.isEmpty()) {
         throw new RuntimeException("No Java files found in source directories");
     }
-    var classpath = buildClassPath(buildDir, dependencies);
+    var classpath = buildClassPath(cpDirs, dependencies);
 
     var command = commands("javac", "--enable-preview", "--source", "24", "-cp", classpath, "-d", buildDir, "-Xlint:unchecked");
     command.addAll(javaFiles);
@@ -202,9 +263,9 @@ List<Path> findJavaFiles(Path sourceDir) throws IOException {
     return Files.walk(sourceDir).filter(path -> path.toString().endsWith(".java")).toList();
 }
 
-String buildClassPath(Path buildDir, Collection<Dependency> dependencies) {
+String buildClassPath(List<Path> cpDirs, Collection<Dependency> dependencies) {
     var classpathEntries = new LinkedHashSet<Path>();
-    classpathEntries.add(buildDir);
+    classpathEntries.addAll(cpDirs);
     dependencies.stream().forEach(dep -> addDependencyToClasspath(dep, classpathEntries));
     return classpathEntries.stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator));
 }
