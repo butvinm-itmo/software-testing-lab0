@@ -1,9 +1,4 @@
-import java.io.*;
-import java.net.*;
-import java.nio.file.*;
-import java.util.*;
-import java.util.function.Function;
-import java.util.stream.*;
+import java.util.Arrays;
 
 final Path LIB_DIR = Paths.get("lib");
 
@@ -11,11 +6,13 @@ final Path BUILD_DIR = Paths.get("target");
 
 final Path SOURCE_DIR = Paths.get("src");
 
-final Path TEST_DIR = Paths.get("tests");
+final String MAIN_CLASS = "butvinm.lab0.task2.App";
+
+final DependencyManager dm = new DependencyManager(LIB_DIR, "https://repo1.maven.org/maven2");
 
 final String LANGCHAIN4J_VERSION = "1.0.0-beta2";
 
-final DependencyManager dm = new DependencyManager(LIB_DIR, "https://repo1.maven.org/maven2");
+final String JACKSON_VERSION = "2.18.3";
 
 final Map<String, Dependency> DEPENDENCIES = Map.of(
     "junit",
@@ -45,29 +42,35 @@ final Map<String, Dependency> DEPENDENCIES = Map.of(
         dm.fromMaven(
             "com.fasterxml.jackson.core",
             "jackson-databind",
-            "2.18.3",
-            dm.fromMaven("com.fasterxml.jackson.core", "jackson-core", "2.18.3"),
-            dm.fromMaven("com.fasterxml.jackson.core", "jackson-annotations", "2.18.3")
+            JACKSON_VERSION,
+            dm.fromMaven("com.fasterxml.jackson.core", "jackson-core", JACKSON_VERSION),
+            dm.fromMaven("com.fasterxml.jackson.core", "jackson-annotations", JACKSON_VERSION)
         ),
-        dm.fromMaven("org.slf4j", "slf4j-api", "2.1.0-alpha1")
+        dm.fromMaven("org.slf4j", "slf4j-api", "2.1.0-alpha1"),
+        dm.fromMaven(
+            "org.tinylog",
+            "slf4j-tinylog",
+            "2.8.0-M1",
+            dm.fromMaven("org.tinylog", "tinylog-api", "2.8.0-M1"),
+            dm.fromMaven("org.tinylog", "tinylog-impl", "2.8.0-M1")
+        )
     ),
     "langchain4j-openai",
     dm.fromMaven("dev.langchain4j", "langchain4j-open-ai", LANGCHAIN4J_VERSION, dm.fromMaven("com.knuddels", "jtokkit", "1.1.0"))
 );
-
-// static final String CLASSPATH = buildClassPath(BUILD_DIR, DEPENDENCIES.values());
 
 void main(String... args) throws Exception {
     if (args.length == 0) {
         System.err.println("Expect target: install, build, test, run");
         System.exit(1);
     }
+    var restArgs = Arrays.copyOfRange(args, 1, args.length);
     switch (args[0]) {
         case "install" -> installCmd();
         case "build" -> buildCmd();
         case "test" -> testCmd();
         case "lint" -> lintCmd();
-        case "run" -> runCmd();
+        case "run" -> runCmd(List.of(restArgs));
         default -> {
             System.err.println("Unknown target: %s".formatted(args[0]));
             System.exit(1);
@@ -77,14 +80,13 @@ void main(String... args) throws Exception {
 
 void installCmd() throws Exception {
     Files.createDirectories(LIB_DIR);
-    DEPENDENCIES.values().forEach(dep -> pohui(() -> dm.installDependency(dep, true)));
+    DEPENDENCIES.values().forEach(dep -> pohui(() -> dm.installDependency(dep, true)).run());
 }
 
 void buildCmd() throws Exception {
     installCmd();
     cleanDir(BUILD_DIR);
     compileJavaSources(SOURCE_DIR, DEPENDENCIES.values(), BUILD_DIR);
-    compileJavaSources(TEST_DIR, DEPENDENCIES.values(), BUILD_DIR);
 }
 
 void testCmd() throws Exception {
@@ -104,13 +106,14 @@ void lintCmd() throws Exception {
     buildCmd();
     var command = commands("java", "-jar", DEPENDENCIES.get("checkstyle").jarPath().toString(), "-c", "checkstyle.xml", "--debug");
     command.addAll(findJavaFiles(SOURCE_DIR).stream().map(Path::toString).toList());
-    command.addAll(findJavaFiles(TEST_DIR).stream().map(Path::toString).toList());
     cmd(command);
 }
 
-void runCmd() throws Exception {
+void runCmd(List<String> args) throws Exception {
     buildCmd();
-    cmd("java", "-cp", buildClassPath(BUILD_DIR, DEPENDENCIES.values()), "butvinm.lab0.task0.App");
+    var command = commands("java", "--enable-preview", "-cp", buildClassPath(BUILD_DIR, DEPENDENCIES.values()), MAIN_CLASS);
+    command.addAll(args);
+    cmd(command);
 }
 
 // Build library
@@ -158,7 +161,7 @@ class DependencyManager {
         var jarPath = this.libDir.resolve(jarName);
         var jarUrl = String.format("%s/%s/%s/%s/%s", this.registry, groupId.replace(".", "/"), artifactId, version, jarName);
         var jarUri = URI.create(jarUrl);
-        return new Dependency(jarName, this.libDir.resolve(jarName), jarUri, Arrays.asList(subDependencies));
+        return new Dependency(jarName, jarPath, jarUri, Arrays.asList(subDependencies));
     }
 
     void installDependency(Dependency dep, boolean verbose) throws Exception {
@@ -167,7 +170,7 @@ class DependencyManager {
             downloadJar(dep);
         }
         if (verbose) System.out.println("Installed %s".formatted(dep.jarName()));
-        dep.subDependencies().stream().forEach(sub -> pohui(() -> installDependency(sub, verbose)));
+        dep.subDependencies().stream().forEach(sub -> pohui(() -> installDependency(sub, verbose)).run());
     }
 
     void downloadJar(Dependency dep) throws IOException {
@@ -190,7 +193,7 @@ void compileJavaSources(Path sourceDir, Collection<Dependency> dependencies, Pat
     }
     var classpath = buildClassPath(buildDir, dependencies);
 
-    var command = commands("javac", "-cp", classpath, "-d", buildDir, "-Xlint:unchecked");
+    var command = commands("javac", "--enable-preview", "--source", "24", "-cp", classpath, "-d", buildDir, "-Xlint:unchecked");
     command.addAll(javaFiles);
     cmd(command);
 }

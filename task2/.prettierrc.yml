@@ -1,6 +1,0 @@
-tabWidth: 4
-printWidth: 140
-
-# prettier struggle to import globally installed plugins by name
-plugins:
-  - /home/butvinm/.config/yarn/global/node_modules/prettier-plugin-java/dist/index.js
