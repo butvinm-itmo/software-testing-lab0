@@ -1,12 +1,8 @@
 package butvinm.lab0.task2;
 
-import static dev.langchain4j.data.message.AiMessage.aiMessage;
-import static dev.langchain4j.data.message.SystemMessage.systemMessage;
-import static dev.langchain4j.data.message.UserMessage.userMessage;
 import static dev.langchain4j.model.openai.OpenAiChatModelName.GPT_4_O_MINI;
 
 import butvinm.lab0.task2.chat.Chat;
-import butvinm.lab0.task2.chat.Message;
 import butvinm.lab0.task2.creatures.Dolphin;
 import butvinm.lab0.task2.creatures.Human;
 import butvinm.lab0.task2.creatures.Vogon;
@@ -14,8 +10,6 @@ import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.function.Supplier;
 
 public class App {

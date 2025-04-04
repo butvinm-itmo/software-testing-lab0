@@ -1,11 +1,9 @@
 package butvinm.lab0.task2.chat;
 
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Random;
-import java.util.stream.Stream;
 
 public class Chat implements Iterable<Message> {
 

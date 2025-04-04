@@ -4,5 +4,13 @@
 <module name="Checker">
   <module name="TreeWalker">
     <module name="FallThrough" />
+    <module name="UnusedImports"/>
+    <module name="MissingOverride"/>
+    <module name="IllegalThrows"/>
+    <module name="IllegalCatch"/>
+    <module name="MutableException"/>
+    <module name="UnusedLocalVariable"/>
+    <module name="EqualsAvoidNull"/>
+    <module name="ParameterAssignment"/>
   </module>
 </module>
