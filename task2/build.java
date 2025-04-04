@@ -20,15 +20,23 @@ final DependencyManager dm = new DependencyManager(LIB_DIR, "https://repo1.maven
 
 final String LANGCHAIN4J_VERSION = "1.0.0-beta2";
 
+final String JACOCO_VERSION = "0.8.13";
+
 final String JACKSON_VERSION = "2.18.3";
 
 final Map<String, Dependency> DEPENDENCIES = Map.of(
     "junit",
     dm.fromMaven("org.junit.platform", "junit-platform-console-standalone", "1.12.0-RC1"),
     "jacoco",
-    dm.fromMaven("org.jacoco", "org.jacoco.cli", "0.8.13", "nodeps"),
+    dm.fromMaven("org.jacoco", "org.jacoco.cli", JACOCO_VERSION, "nodeps"),
     "jacoco-agent",
-    dm.fromMaven("org.jacoco", "org.jacoco.agent", "0.8.13", "runtime", dm.fromMaven("org.jacoco", "org.jacoco.agent", "0.8.13")),
+    dm.fromMaven(
+        "org.jacoco",
+        "org.jacoco.agent",
+        JACOCO_VERSION,
+        "runtime",
+        dm.fromMaven("org.jacoco", "org.jacoco.agent", JACOCO_VERSION)
+    ),
     "checkstyle",
     dm.fromUrl(
         "checkstyle-10.21.3-all.jar",
@@ -103,14 +111,11 @@ void buildCmd() throws Exception {
 }
 
 void testCmd() throws Exception {
+    var jacocoExecFile = TARGET_DIR.resolve("jacoco.exec");
+
     buildCmd();
 
     cmd("java", "-jar", DEPENDENCIES.get("jacoco").jarPath(), "instrument", "--dest", INSTRUCTED_DIR);
-    // java -javaagent:lib/org.jacoco.agent-0.8.13.jar=destfile=target/jacoco.exec \
-    //      -cp "target/instrumented:target/classes:lib/*" \
-    //      org.junit.runner.JUnitCore com.example.TestClass  # Replace with your test class
-
-    var jacocoExecFile = TARGET_DIR.resolve("jacoco.exec");
 
     cmd(
         "java",
@@ -125,11 +130,6 @@ void testCmd() throws Exception {
         "--scan-classpath"
     );
 
-    // java -jar lib/org.jacoco.cli-0.8.13-nodeps.jar report target/jacoco.exec \
-    //      --classfiles target/classes \
-    //      --sourcefiles src/main/java \
-    //      --html target/report
-
     cmd(
         "java",
         "-jar",
@@ -143,15 +143,6 @@ void testCmd() throws Exception {
         "--html",
         COVERAGE_REPORT_DIR
     );
-    // cmd(
-    //     "java",
-    //     "-jar",
-    //     DEPENDENCIES.get("junit").jarPath().toString(),
-    //     "execute",
-    //     "--classpath",
-    //     buildClassPath(CP_DIRS, DEPENDENCIES.values()),
-    //     "--scan-classpath"
-    // );
 }
 
 void lintCmd() throws Exception {
