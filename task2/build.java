@@ -10,8 +10,6 @@ final Path INSTRUCTED_DIR = TARGET_DIR.resolve("instructed");
 
 final List<Path> CP_DIRS = List.of(CLASSES_DIR, TEST_CLASSES_DIR, INSTRUCTED_DIR);
 
-final Path COVERAGE_REPORT_DIR = TARGET_DIR.resolve("coverage-report");
-
 final Path SOURCE_DIR = Paths.get("src");
 
 final String MAIN_CLASS = "butvinm.lab0.task2.App";
@@ -130,6 +128,7 @@ void testCmd() throws Exception {
         "--scan-classpath"
     );
 
+    // generate html report
     cmd(
         "java",
         "-jar",
@@ -141,7 +140,43 @@ void testCmd() throws Exception {
         "--sourcefiles",
         SOURCE_DIR.resolve("main/java"),
         "--html",
-        COVERAGE_REPORT_DIR
+        TARGET_DIR.resolve("coverage-report")
+    );
+    
+    // generate xml report for CI
+    cmd(
+        "java",
+        "-jar",
+        DEPENDENCIES.get("jacoco").jarPath(),
+        "report",
+        jacocoExecFile,
+        "--classfiles",
+        CLASSES_DIR,
+        "--sourcefiles",
+        SOURCE_DIR.resolve("main/java"),
+        "--xml",
+        TARGET_DIR.resolve("coverage-report.xml")
+    );
+
+    // generate csv report and print in a human readable format
+    cmd(
+        "java",
+        "-jar",
+        DEPENDENCIES.get("jacoco").jarPath(),
+        "report",
+        jacocoExecFile,
+        "--classfiles",
+        CLASSES_DIR,
+        "--sourcefiles",
+        SOURCE_DIR.resolve("main/java"),
+        "--csv",
+        TARGET_DIR.resolve("coverage-report.csv")
+    );
+    cmd(
+        "awk",
+        "-F,",
+        "NR==1{next} {pkg=$2; cls=$3; lm=$8; lc=$9; l_total=lm+lc; l_pct=l_total>0?lc/l_total*100:0; total_lm+=lm; total_lc+=lc; printf \"%-60s | %6.2f%%\\n\", pkg \".\" cls, l_pct} END{tl_total=total_lm+total_lc; tl_pct=tl_total>0?total_lc/tl_total*100:0; printf \"%-60s | %6.2f%%\\n\", \"TOTAL\", tl_pct}",
+        TARGET_DIR.resolve("coverage-report.csv")
     );
 }
 
