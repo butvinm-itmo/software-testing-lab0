@@ -58,7 +58,6 @@ public class App {
     public record Config(Integer messageLimit, Boolean logRequests, String openaiApiKey) {}
 
     public Config parseConfig(String... args) throws IllegalArgumentException {
-        System.out.println("adasdasdd");
         if (args.length != 3) {
             throw new IllegalArgumentException("One of the required arguments is missing");
         }
