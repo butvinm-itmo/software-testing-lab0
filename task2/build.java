@@ -116,7 +116,7 @@ void main(String... args) throws Exception {
 
 void installCmd() throws Exception {
     Files.createDirectories(LIB_DIR);
-    DEPENDENCIES.values().forEach(dep -> pohui(() -> dm.installDependency(dep, true)).run());
+    DEPENDENCIES.values().forEach(dep -> doNotBother(() -> dm.installDependency(dep, true)).run());
 }
 
 void buildCmd() throws Exception {
@@ -290,7 +290,7 @@ class DependencyManager {
             downloadJar(dep);
         }
         if (verbose) System.out.println("Installed %s".formatted(dep.jarName()));
-        dep.subDependencies().stream().forEach(sub -> pohui(() -> installDependency(sub, verbose)).run());
+        dep.subDependencies().stream().forEach(sub -> doNotBother(() -> installDependency(sub, verbose)).run());
     }
 
     void downloadJar(Dependency dep) throws IOException {
@@ -345,7 +345,7 @@ interface UnsafeRunnable {
     void run() throws Exception;
 }
 
-<R> Supplier<R> pohui(UnsafeSupplier<R> func) {
+<R> Supplier<R> doNotBother(UnsafeSupplier<R> func) {
     return () -> {
         try {
             return func.produce();
@@ -355,7 +355,7 @@ interface UnsafeRunnable {
     };
 }
 
-Runnable pohui(UnsafeRunnable func) {
+Runnable doNotBother(UnsafeRunnable func) {
     return () -> {
         try {
             func.run();
