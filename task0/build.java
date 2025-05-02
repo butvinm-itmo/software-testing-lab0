@@ -12,8 +12,6 @@ final List<Path> CP_DIRS = List.of(CLASSES_DIR, TEST_CLASSES_DIR, INSTRUCTED_DIR
 
 final Path SOURCE_DIR = Paths.get("src");
 
-final String MAIN_CLASS = "butvinm.lab0.task2.App";
-
 final DependencyManager dm = new DependencyManager(LIB_DIR, "https://repo1.maven.org/maven2");
 
 final String LANGCHAIN4J_VERSION = "1.0.0-beta2";
@@ -56,42 +54,7 @@ final Map<String, Dependency> DEPENDENCIES = Map.of(
     dm.fromUrl(
         "checkstyle-10.21.3-all.jar",
         "https://github.com/checkstyle/checkstyle/releases/download/checkstyle-10.21.3/checkstyle-10.21.3-all.jar"
-    ),
-    "langchain4j",
-    dm.fromMaven(
-        "dev.langchain4j",
-        "langchain4j",
-        LANGCHAIN4J_VERSION,
-        dm.fromMaven(
-            "dev.langchain4j",
-            "langchain4j-http-client-jdk",
-            LANGCHAIN4J_VERSION,
-            dm.fromMaven("dev.langchain4j", "langchain4j-http-client", LANGCHAIN4J_VERSION)
-        )
-    ),
-    "langchain4j-core",
-    dm.fromMaven(
-        "dev.langchain4j",
-        "langchain4j-core",
-        LANGCHAIN4J_VERSION,
-        dm.fromMaven(
-            "com.fasterxml.jackson.core",
-            "jackson-databind",
-            JACKSON_VERSION,
-            dm.fromMaven("com.fasterxml.jackson.core", "jackson-core", JACKSON_VERSION),
-            dm.fromMaven("com.fasterxml.jackson.core", "jackson-annotations", JACKSON_VERSION)
-        ),
-        dm.fromMaven("org.slf4j", "slf4j-api", "2.1.0-alpha1"),
-        dm.fromMaven(
-            "org.tinylog",
-            "slf4j-tinylog",
-            "2.8.0-M1",
-            dm.fromMaven("org.tinylog", "tinylog-api", "2.8.0-M1"),
-            dm.fromMaven("org.tinylog", "tinylog-impl", "2.8.0-M1")
-        )
-    ),
-    "langchain4j-openai",
-    dm.fromMaven("dev.langchain4j", "langchain4j-open-ai", LANGCHAIN4J_VERSION, dm.fromMaven("com.knuddels", "jtokkit", "1.1.0"))
+    )
 );
 
 void main(String... args) throws Exception {
@@ -99,14 +62,12 @@ void main(String... args) throws Exception {
         System.err.println("Expect target: install, build, test, run");
         System.exit(1);
     }
-    var restArgs = Arrays.copyOfRange(args, 1, args.length);
     switch (args[0]) {
         case "install" -> installCmd();
         case "build" -> buildCmd();
         case "test" -> testCmd();
         case "test-mutate" -> testMutateCmd();
         case "lint" -> lintCmd();
-        case "run" -> runCmd(List.of(restArgs));
         default -> {
             System.err.println("Unknown target: %s".formatted(args[0]));
             System.exit(1);
@@ -199,7 +160,8 @@ void testCmd() throws Exception {
 }
 
 void testMutateCmd() throws Exception {
-    testCmd();
+    // testCmd();
+    buildCmd();
     cmd(
         "java",
         "-cp",
@@ -208,9 +170,10 @@ void testMutateCmd() throws Exception {
         "--reportDir",
         TARGET_DIR.resolve("pit-report"),
         "--targetClasses",
-        "butvinm.lab0.task2.*",
+        "butvinm.lab0.task0.*",
         "--sourceDirs",
-        SOURCE_DIR.resolve("main")
+        SOURCE_DIR.resolve("main"),
+        "--verbose"
     );
 }
 
@@ -218,13 +181,6 @@ void lintCmd() throws Exception {
     buildCmd();
     var command = commands("java", "-jar", DEPENDENCIES.get("checkstyle").jarPath().toString(), "-c", "checkstyle.xml", "--debug");
     command.addAll(findJavaFiles(SOURCE_DIR).stream().map(Path::toString).toList());
-    cmd(command);
-}
-
-void runCmd(List<String> args) throws Exception {
-    buildCmd();
-    var command = commands("java", "--enable-preview", "-cp", buildClassPath(CP_DIRS, DEPENDENCIES.values()), MAIN_CLASS);
-    command.addAll(args);
     cmd(command);
 }
 

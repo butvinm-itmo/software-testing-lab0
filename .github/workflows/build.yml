@@ -22,8 +22,12 @@ jobs:
         with:
           distribution: "oracle"
           java-version: "24"
+            
+      - name: Run Task 0 tests
+        working-directory: ./task0
+        run: java --enable-preview build.java test
 
-      - name: Run tests
+      - name: Run Task 2 tests
         working-directory: ./task2
         run: java --enable-preview build.java test
 

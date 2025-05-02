@@ -59,16 +59,16 @@ public class App {
 
     public Config parseConfig(String... args) throws IllegalArgumentException {
         if (args.length != 3) {
-            throw new IllegalArgumentException("One of the required arguments is missing");
+            throw new IllegalArgumentException("Unexpected number of arguments, expect exactly 3");
         }
         Integer messagesLimit;
         try {
             messagesLimit = Integer.parseInt(args[0]);
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("chat-message-limit must be a positive integer, but got %s".formatted(args[0]), e);
+            throw new IllegalArgumentException("chat-message-limit must be a positive integer, but got '%s'".formatted(args[0]), e);
         }
         if (messagesLimit <= 0) {
-            throw new IllegalArgumentException("chat-message-limit must be a positive integer, but got %s".formatted(args[0]));
+            throw new IllegalArgumentException("chat-message-limit must be a positive integer, but got '%s'".formatted(args[0]));
         }
 
         Boolean logRequests;
