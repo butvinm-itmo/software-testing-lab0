@@ -1,0 +1,321 @@
+final Path LIB_DIR = Paths.get("lib");
+
+final Path TARGET_DIR = Paths.get("target");
+
+final Path CLASSES_DIR = TARGET_DIR.resolve("classes");
+
+final Path TEST_CLASSES_DIR = TARGET_DIR.resolve("test-classes");
+
+final Path INSTRUCTED_DIR = TARGET_DIR.resolve("instructed");
+
+final List<Path> CP_DIRS = List.of(CLASSES_DIR, TEST_CLASSES_DIR, INSTRUCTED_DIR);
+
+final Path SOURCE_DIR = Paths.get("src");
+
+final DependencyManager dm = new DependencyManager(LIB_DIR, "https://repo1.maven.org/maven2");
+
+final String LANGCHAIN4J_VERSION = "1.0.0-beta2";
+
+final String JACOCO_VERSION = "0.8.13";
+
+final String JACKSON_VERSION = "2.18.3";
+
+final String PITEST_VERSION = "1.19.1";
+
+final Map<String, Dependency> DEPENDENCIES = Map.of(
+    "junit",
+    dm.fromMaven(
+        "org.junit.platform",
+        "junit-platform-console-standalone",
+        "1.12.0-RC1",
+        dm.fromMaven("org.junit.jupiter", "junit-jupiter-params", "5.12.2")
+    ),
+    "jacoco",
+    dm.fromMaven("org.jacoco", "org.jacoco.cli", JACOCO_VERSION, "nodeps"),
+    "jacoco-agent",
+    dm.fromMaven(
+        "org.jacoco",
+        "org.jacoco.agent",
+        JACOCO_VERSION,
+        "runtime",
+        dm.fromMaven("org.jacoco", "org.jacoco.agent", JACOCO_VERSION)
+    ),
+    "pit",
+    dm.fromMaven(
+        "org.pitest",
+        "pitest-command-line",
+        PITEST_VERSION,
+        dm.fromMaven("org.pitest", "pitest", PITEST_VERSION),
+        dm.fromMaven("org.pitest", "pitest-entry", PITEST_VERSION),
+        dm.fromMaven("org.pitest", "pitest-html-report", PITEST_VERSION),
+        dm.fromMaven("org.pitest", "pitest-junit5-plugin", "1.2.2")
+    ),
+    "checkstyle",
+    dm.fromUrl(
+        "checkstyle-10.21.3-all.jar",
+        "https://github.com/checkstyle/checkstyle/releases/download/checkstyle-10.21.3/checkstyle-10.21.3-all.jar"
+    )
+);
+
+void main(String... args) throws Exception {
+    if (args.length == 0) {
+        System.err.println("Expect target: install, build, test, run");
+        System.exit(1);
+    }
+    switch (args[0]) {
+        case "install" -> installCmd();
+        case "build" -> buildCmd();
+        case "test" -> testCmd();
+        case "test-mutate" -> testMutateCmd();
+        case "lint" -> lintCmd();
+        default -> {
+            System.err.println("Unknown target: %s".formatted(args[0]));
+            System.exit(1);
+        }
+    }
+}
+
+void installCmd() throws Exception {
+    Files.createDirectories(LIB_DIR);
+    DEPENDENCIES.values().forEach(dep -> doNotBother(() -> dm.installDependency(dep, true)).run());
+}
+
+void buildCmd() throws Exception {
+    installCmd();
+    cleanDir(TARGET_DIR);
+    compileJavaSources(SOURCE_DIR.resolve("main"), DEPENDENCIES.values(), CP_DIRS, CLASSES_DIR);
+    compileJavaSources(SOURCE_DIR.resolve("test"), DEPENDENCIES.values(), CP_DIRS, TEST_CLASSES_DIR);
+}
+
+void testCmd() throws Exception {
+    var jacocoExecFile = TARGET_DIR.resolve("jacoco.exec");
+
+    buildCmd();
+
+    cmd("java", "-jar", DEPENDENCIES.get("jacoco").jarPath(), "instrument", "--dest", INSTRUCTED_DIR);
+
+    cmd(
+        "java",
+        "-javaagent:%s=destfile=%s".formatted(DEPENDENCIES.get("jacoco-agent").jarPath(), jacocoExecFile),
+        "-cp",
+        buildClassPath(CP_DIRS, DEPENDENCIES.values()),
+        "-jar",
+        DEPENDENCIES.get("junit").jarPath(),
+        "execute",
+        "--classpath",
+        buildClassPath(CP_DIRS, DEPENDENCIES.values()),
+        "--scan-classpath"
+    );
+
+    // generate html report
+    cmd(
+        "java",
+        "-jar",
+        DEPENDENCIES.get("jacoco").jarPath(),
+        "report",
+        jacocoExecFile,
+        "--classfiles",
+        CLASSES_DIR,
+        "--sourcefiles",
+        SOURCE_DIR.resolve("main/java"),
+        "--html",
+        TARGET_DIR.resolve("coverage-report")
+    );
+
+    // generate xml report for CI
+    cmd(
+        "java",
+        "-jar",
+        DEPENDENCIES.get("jacoco").jarPath(),
+        "report",
+        jacocoExecFile,
+        "--classfiles",
+        CLASSES_DIR,
+        "--sourcefiles",
+        SOURCE_DIR.resolve("main/java"),
+        "--xml",
+        TARGET_DIR.resolve("coverage-report.xml")
+    );
+
+    // generate csv report and print in a human readable format
+    cmd(
+        "java",
+        "-jar",
+        DEPENDENCIES.get("jacoco").jarPath(),
+        "report",
+        jacocoExecFile,
+        "--classfiles",
+        CLASSES_DIR,
+        "--sourcefiles",
+        SOURCE_DIR.resolve("main/java"),
+        "--csv",
+        TARGET_DIR.resolve("coverage-report.csv")
+    );
+    cmd(
+        "awk",
+        "-F,",
+        "NR==1{next} {pkg=$2; cls=$3; lm=$8; lc=$9; l_total=lm+lc; l_pct=l_total>0?lc/l_total*100:0; total_lm+=lm; total_lc+=lc; printf \"%-60s | %6.2f%%\\n\", pkg \".\" cls, l_pct} END{tl_total=total_lm+total_lc; tl_pct=tl_total>0?total_lc/tl_total*100:0; printf \"%-60s | %6.2f%%\\n\", \"TOTAL\", tl_pct}",
+        TARGET_DIR.resolve("coverage-report.csv")
+    );
+}
+
+void testMutateCmd() throws Exception {
+    testCmd();
+    cmd(
+        "java",
+        "-cp",
+        buildClassPath(CP_DIRS, DEPENDENCIES.values()),
+        "org.pitest.mutationtest.commandline.MutationCoverageReport",
+        "--reportDir",
+        TARGET_DIR.resolve("pit-report"),
+        "--targetClasses",
+        "butvinm.lab0.task1.*",
+        "--sourceDirs",
+        SOURCE_DIR.resolve("main"),
+        "--verbose"
+    );
+}
+
+void lintCmd() throws Exception {
+    buildCmd();
+    var command = commands("java", "-jar", DEPENDENCIES.get("checkstyle").jarPath().toString(), "-c", "checkstyle.xml", "--debug");
+    command.addAll(findJavaFiles(SOURCE_DIR).stream().map(Path::toString).toList());
+    cmd(command);
+}
+
+// Build library
+void cmd(Object... command) throws IOException, InterruptedException {
+    cmd(Arrays.asList(command));
+}
+
+void cmd(List<Object> command) throws IOException, InterruptedException {
+    var args = command.stream().map(Object::toString).toList();
+
+    System.out.println("Execute command: %s".formatted(String.join(" ", args)));
+
+    var process = new ProcessBuilder(args).inheritIO().start();
+    var exitCode = process.waitFor();
+    if (exitCode != 0) {
+        System.err.println("Command failed with exit code: %d".formatted(exitCode));
+        System.exit(exitCode);
+    }
+}
+
+ArrayList<Object> commands(Object... items) {
+    return new ArrayList<Object>(List.of(items));
+}
+
+record Dependency(String jarName, Path jarPath, URI jarUri, List<Dependency> subDependencies) {}
+
+class DependencyManager {
+
+    final Path libDir;
+    final String registry;
+
+    public DependencyManager(Path libDir, String registry) {
+        this.libDir = libDir;
+        this.registry = registry;
+    }
+
+    public Dependency fromUrl(String jarName, String jarUrl, Dependency... subDependencies) {
+        var jarPath = this.libDir.resolve(jarName);
+        var jarUri = URI.create(jarUrl);
+        return new Dependency(jarName, jarPath, jarUri, Arrays.asList(subDependencies));
+    }
+
+    public Dependency fromMaven(String groupId, String artifactId, String version, Dependency... subDependencies) {
+        var jarName = String.format("%s-%s.jar", artifactId, version);
+        var jarPath = this.libDir.resolve(jarName);
+        var jarUrl = String.format("%s/%s/%s/%s/%s", this.registry, groupId.replace(".", "/"), artifactId, version, jarName);
+        var jarUri = URI.create(jarUrl);
+        return new Dependency(jarName, jarPath, jarUri, Arrays.asList(subDependencies));
+    }
+
+    public Dependency fromMaven(String groupId, String artifactId, String version, String modifier, Dependency... subDependencies) {
+        var jarName = String.format("%s-%s-%s.jar", artifactId, version, modifier);
+        var jarPath = this.libDir.resolve(jarName);
+        var jarUrl = String.format("%s/%s/%s/%s/%s", this.registry, groupId.replace(".", "/"), artifactId, version, jarName);
+        var jarUri = URI.create(jarUrl);
+        return new Dependency(jarName, jarPath, jarUri, Arrays.asList(subDependencies));
+    }
+
+    void installDependency(Dependency dep, boolean verbose) throws Exception {
+        if (Files.notExists(dep.jarPath())) {
+            if (verbose) System.out.println("Downloading jar %s".formatted(dep.jarUri()));
+            downloadJar(dep);
+        }
+        if (verbose) System.out.println("Installed %s".formatted(dep.jarName()));
+        dep.subDependencies().stream().forEach(sub -> doNotBother(() -> installDependency(sub, verbose)).run());
+    }
+
+    void downloadJar(Dependency dep) throws IOException {
+        try (InputStream in = dep.jarUri().toURL().openStream()) {
+            Files.copy(in, dep.jarPath());
+        }
+    }
+}
+
+void cleanDir(Path dir) throws IOException {
+    if (Files.exists(dir)) {
+        Files.walk(dir).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+    }
+}
+
+void compileJavaSources(Path sourceDir, Collection<Dependency> dependencies, List<Path> cpDirs, Path buildDir)
+    throws IOException, InterruptedException {
+    var javaFiles = findJavaFiles(sourceDir);
+    if (javaFiles.isEmpty()) {
+        throw new RuntimeException("No Java files found in source directories");
+    }
+    var classpath = buildClassPath(cpDirs, dependencies);
+
+    var command = commands("javac", "--enable-preview", "--source", "24", "-cp", classpath, "-d", buildDir, "-Xlint:unchecked");
+    command.addAll(javaFiles);
+    cmd(command);
+}
+
+List<Path> findJavaFiles(Path sourceDir) throws IOException {
+    return Files.walk(sourceDir).filter(path -> path.toString().endsWith(".java")).toList();
+}
+
+String buildClassPath(List<Path> cpDirs, Collection<Dependency> dependencies) {
+    var classpathEntries = new LinkedHashSet<Path>();
+    classpathEntries.addAll(cpDirs);
+    dependencies.stream().forEach(dep -> addDependencyToClasspath(dep, classpathEntries));
+    return classpathEntries.stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator));
+}
+
+void addDependencyToClasspath(Dependency dep, Set<Path> classpathEntries) {
+    classpathEntries.add(dep.jarPath());
+    dep.subDependencies().stream().forEach(sub -> addDependencyToClasspath(sub, classpathEntries));
+}
+
+@FunctionalInterface
+interface UnsafeSupplier<R> {
+    R produce() throws Exception;
+}
+
+@FunctionalInterface
+interface UnsafeRunnable {
+    void run() throws Exception;
+}
+
+<R> Supplier<R> doNotBother(UnsafeSupplier<R> func) {
+    return () -> {
+        try {
+            return func.produce();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    };
+}
+
+Runnable doNotBother(UnsafeRunnable func) {
+    return () -> {
+        try {
+            func.run();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    };
+}

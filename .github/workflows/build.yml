@@ -26,7 +26,11 @@ jobs:
       - name: Run Task 0 tests
         working-directory: ./task0
         run: java --enable-preview build.java test
-
+      
+      - name: Run Task 1 tests
+        working-directory: ./task1
+        run: java --enable-preview build.java test
+      
       - name: Run Task 2 tests
         working-directory: ./task2
         run: java --enable-preview build.java test
