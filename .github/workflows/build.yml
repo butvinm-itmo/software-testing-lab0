@@ -22,8 +22,22 @@ jobs:
         with:
           distribution: "oracle"
           java-version: "24"
+            
+      - name: Run Task 0 tests
+        working-directory: ./task0
+        run: java --enable-preview build.java test
 
-      - name: Run tests
+      - name: Publish coverage report
+        id: jacoco
+        uses: madrapps/jacoco-report@v1.7.1
+        with:
+          paths: |
+            ${{ github.workspace }}/**/target/coverage-report.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          min-coverage-overall: 85
+          min-coverage-changed-files: 85
+
+      - name: Run Task 2 tests
         working-directory: ./task2
         run: java --enable-preview build.java test
 
