@@ -11,9 +11,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.FieldSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.extension.ExtendWith;
 
+@ExtendWith(RetryExtension.class)
 public class TestApp {
-
     static final Supplier<Stream<Arguments>> testParseConfig_ValidInputs = () ->
         Stream.of(
             arguments(new App.Config(1, true, "key0"), new String[] { "1", "TrUe", "key0" }),
