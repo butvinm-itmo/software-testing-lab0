@@ -22,9 +22,16 @@ final String JACOCO_VERSION = "0.8.13";
 
 final String JACKSON_VERSION = "2.18.3";
 
+final String PITEST_VERSION = "1.19.1";
+
 final Map<String, Dependency> DEPENDENCIES = Map.of(
     "junit",
-    dm.fromMaven("org.junit.platform", "junit-platform-console-standalone", "1.12.0-RC1"),
+    dm.fromMaven(
+        "org.junit.platform",
+        "junit-platform-console-standalone",
+        "1.12.0-RC1",
+        dm.fromMaven("org.junit.jupiter", "junit-jupiter-params", "5.12.2")
+    ),
     "jacoco",
     dm.fromMaven("org.jacoco", "org.jacoco.cli", JACOCO_VERSION, "nodeps"),
     "jacoco-agent",
@@ -34,6 +41,16 @@ final Map<String, Dependency> DEPENDENCIES = Map.of(
         JACOCO_VERSION,
         "runtime",
         dm.fromMaven("org.jacoco", "org.jacoco.agent", JACOCO_VERSION)
+    ),
+    "pit",
+    dm.fromMaven(
+        "org.pitest",
+        "pitest-command-line",
+        PITEST_VERSION,
+        dm.fromMaven("org.pitest", "pitest", PITEST_VERSION),
+        dm.fromMaven("org.pitest", "pitest-entry", PITEST_VERSION),
+        dm.fromMaven("org.pitest", "pitest-html-report", PITEST_VERSION),
+        dm.fromMaven("org.pitest", "pitest-junit5-plugin", "1.2.2")
     ),
     "checkstyle",
     dm.fromUrl(
@@ -87,6 +104,7 @@ void main(String... args) throws Exception {
         case "install" -> installCmd();
         case "build" -> buildCmd();
         case "test" -> testCmd();
+        case "test-mutate" -> testMutateCmd();
         case "lint" -> lintCmd();
         case "run" -> runCmd(List.of(restArgs));
         default -> {
@@ -142,7 +160,7 @@ void testCmd() throws Exception {
         "--html",
         TARGET_DIR.resolve("coverage-report")
     );
-    
+
     // generate xml report for CI
     cmd(
         "java",
@@ -177,6 +195,22 @@ void testCmd() throws Exception {
         "-F,",
         "NR==1{next} {pkg=$2; cls=$3; lm=$8; lc=$9; l_total=lm+lc; l_pct=l_total>0?lc/l_total*100:0; total_lm+=lm; total_lc+=lc; printf \"%-60s | %6.2f%%\\n\", pkg \".\" cls, l_pct} END{tl_total=total_lm+total_lc; tl_pct=tl_total>0?total_lc/tl_total*100:0; printf \"%-60s | %6.2f%%\\n\", \"TOTAL\", tl_pct}",
         TARGET_DIR.resolve("coverage-report.csv")
+    );
+}
+
+void testMutateCmd() throws Exception {
+    testCmd();
+    cmd(
+        "java",
+        "-cp",
+        buildClassPath(CP_DIRS, DEPENDENCIES.values()),
+        "org.pitest.mutationtest.commandline.MutationCoverageReport",
+        "--reportDir",
+        TARGET_DIR.resolve("pit-report"),
+        "--targetClasses",
+        "butvinm.lab0.task2.*",
+        "--sourceDirs",
+        SOURCE_DIR.resolve("main")
     );
 }
 
