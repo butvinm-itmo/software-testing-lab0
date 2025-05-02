@@ -1,111 +1,62 @@
 package butvinm.lab0.task2;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.params.provider.Arguments.*;
 
+import java.util.function.Supplier;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.FieldSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 public class TestApp {
 
-    @Test
-    public void testParseConfig_ValidInputs() {
+    static final Supplier<Stream<Arguments>> testParseConfig_ValidInputs = () ->
+        Stream.of(
+            arguments(new App.Config(1, true, "key0"), new String[] { "1", "TrUe", "key0" }),
+            arguments(new App.Config(2, false, "key1"), new String[] { "2", "FaLsE", "key1" })
+        );
+
+    @ParameterizedTest
+    @FieldSource
+    public void testParseConfig_ValidInputs(App.Config expected, String[] args) {
         var app = new App();
-        assertEquals(new App.Config(10, true, "test-key"), app.parseConfig("10", "true", "test-key"));
-        assertEquals(new App.Config(5, false, "another-key"), app.parseConfig("5", "false", "another-key"));
-        assertEquals(new App.Config(100, true, ""), app.parseConfig("100", "True", ""));
+        assertEquals(expected, app.parseConfig(args));
     }
 
     @Test
-    public void testParseConfig_CaseInsensitiveLogRequests() {
-        var app = new App();
-        assertEquals(new App.Config(10, true, "test-key"), app.parseConfig("10", "TRUE", "test-key"));
-        assertEquals(new App.Config(10, true, "test-key"), app.parseConfig("10", "True", "test-key"));
-        assertEquals(new App.Config(10, false, "test-key"), app.parseConfig("10", "FALSE", "test-key"));
-        assertEquals(new App.Config(10, false, "test-key"), app.parseConfig("10", "False", "test-key"));
-    }
-
-    @Test
-    public void testParseConfig_MissingArguments() {
+    public void testParseConfig_BadNumberOfArguments() {
         var app = new App();
 
-        // Test with missing arguments
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            app.parseConfig("10", "true");
-        });
-        assertEquals("One of the required arguments is missing", exception.getMessage());
+        var exception = assertThrows(IllegalArgumentException.class, () -> app.parseConfig());
+        assertEquals("Unexpected number of arguments, expect exactly 3", exception.getMessage());
 
-        exception = assertThrows(IllegalArgumentException.class, () -> {
-            app.parseConfig("10");
-        });
-        assertEquals("One of the required arguments is missing", exception.getMessage());
-
-        exception = assertThrows(IllegalArgumentException.class, () -> {
-            app.parseConfig();
-        });
-        assertEquals("One of the required arguments is missing", exception.getMessage());
-    }
-
-    @Test
-    public void testParseConfig_TooManyArguments() {
-        var app = new App();
-
-        // Test with too many arguments (should ignore extras)
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            app.parseConfig("10", "true", "api-key", "extra-arg");
-        });
-        assertEquals("One of the required arguments is missing", exception.getMessage());
+        exception = assertThrows(IllegalArgumentException.class, () -> app.parseConfig("_", "_", "_", "_"));
+        assertEquals("Unexpected number of arguments, expect exactly 3", exception.getMessage());
     }
 
     @Test
     public void testParseConfig_InvalidMessageLimit() {
         var app = new App();
 
-        // Test with non-integer message limit
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            app.parseConfig("abc", "true", "test-key");
-        });
-        assertTrue(exception.getMessage().contains("must be a positive integer"));
+        var exception = assertThrows(IllegalArgumentException.class, () -> app.parseConfig("NaN", "_", "_"));
+        assertEquals("chat-message-limit must be a positive integer, but got 'NaN'", exception.getMessage());
 
-        // Test with zero message limit
-        exception = assertThrows(IllegalArgumentException.class, () -> {
-            app.parseConfig("0", "true", "test-key");
-        });
-        assertEquals("chat-message-limit must be a positive integer, but got 0", exception.getMessage());
+        exception = assertThrows(IllegalArgumentException.class, () -> app.parseConfig("0", "_", "_"));
+        assertEquals("chat-message-limit must be a positive integer, but got '0'", exception.getMessage());
 
-        // Test with negative message limit
-        exception = assertThrows(IllegalArgumentException.class, () -> {
-            app.parseConfig("-5", "true", "test-key");
-        });
-        assertEquals("chat-message-limit must be a positive integer, but got -5", exception.getMessage());
+        exception = assertThrows(IllegalArgumentException.class, () -> app.parseConfig("-1", "_", "_"));
+        assertEquals("chat-message-limit must be a positive integer, but got '-1'", exception.getMessage());
     }
 
     @Test
     public void testParseConfig_InvalidLogRequests() {
         var app = new App();
 
-        // Test with invalid logRequests value
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            app.parseConfig("10", "yes", "test-key");
-        });
-        assertEquals("log-requests must be either 'true' or 'false', but got 'yes'", exception.getMessage());
-
-        exception = assertThrows(IllegalArgumentException.class, () -> {
-            app.parseConfig("10", "1", "test-key");
-        });
-        assertEquals("log-requests must be either 'true' or 'false', but got '1'", exception.getMessage());
-
-        exception = assertThrows(IllegalArgumentException.class, () -> {
-            app.parseConfig("10", "", "test-key");
-        });
-        assertEquals("log-requests must be either 'true' or 'false', but got ''", exception.getMessage());
-    }
-
-    @ParameterizedTest
-    @ValueSource(ints = { 1, 5, 10, 100, Integer.MAX_VALUE })
-    public void testParseConfig_ValidMessageLimits(int limit) {
-        var app = new App();
-        assertEquals(new App.Config(limit, true, "test-key"), app.parseConfig(String.valueOf(limit), "true", "test-key"));
+        var exception = assertThrows(IllegalArgumentException.class, () -> app.parseConfig("1", "NaB", "_"));
+        assertEquals("log-requests must be either 'true' or 'false', but got 'NaB'", exception.getMessage());
     }
 }
