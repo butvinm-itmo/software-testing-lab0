@@ -36,33 +36,36 @@ java --enable-preview build.java test
 java --enable-preview build.java test-mutate
 ```
 
-## Test cases
+## План тестирования
 
-We will use coverage and mutation testing to figure out which test cases to create.
+Воспользуемся анализом покрытия кода и мутационным тестированием для выведения тест-кейсов
 
-Lets start with simplest test case: graph with single node:
+Начнем с одного простейшего тестового случая - графа с одной вершиной
 
-**Results:**
+**Результат:**
 
 ![](./assets/mutation_0.png)
 
-Obviously we have never iterate the neighbors because we don't have any if them.
-Lets add test case with some neighbors of the node.
+Очевидно, что мы никогда не доходим до итерации по соседям, потому что их нет.
+Добавим тест-кейс с вершиной с несколькими соседями
 
-**Results:**
+**Результат:**
 
 ![](./assets/mutation_1.png)
 
-The remainging code path will only be triggered if there a cycle within the graph. Lets add one
+Остался непокрытым только код, проверяющий повторное прохождение вершины, то есть наличие в графе цикла.
+Добавим такой тест-кейс.
 
-**Results:**
+**Результат:**
 
 ![](./assets/mutation_2.png)
 
-Now whole code is covered, but two mutatns still survide. 
+Теперь весь код покрыт тестами, но остались выжившие мутанты.
 
-The first is `resetCheckpoints()` - it is only used for testing, so we can safely ignore it.
+Первый мутант находится в функции `resetCheckpoints()`. Эта вспомогательная функция для тестирования, ее можем пропустить.
 
-The second is replacig of dfs result with empty list. It survives because we not validate dfs result, lets verify it too.
+Второй мутант заменил возвращаемый список вершин на пустой и тесты не упали. Это произошло из-за того, что в тестах не было проверки возвращаемого значения - добавим ее.
 
-The final result is:
+**Финальный результат:**
+
+![](./assets/mutation_3.png)

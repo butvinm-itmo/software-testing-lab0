@@ -47,13 +47,13 @@ public class TestYetAnotherMath {
         assertEquals(expected, YetAnotherMath.arctg(x), PRECISION);
     }
 
-    static Stream<Double> generateRandomValues() {
+    static Stream<Double> testArctg_SymmetryProperty() {
         Random random = new Random(69);
         return random.doubles(-0.95, 0.95).limit(100).boxed();
     }
 
     @ParameterizedTest
-    @MethodSource("generateRandomValues")
+    @MethodSource
     public void testArctg_SymmetryProperty(double x) {
         double result1 = YetAnotherMath.arctg(x);
         double result2 = YetAnotherMath.arctg(-x);

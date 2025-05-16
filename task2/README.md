@@ -38,58 +38,57 @@ java --enable-preview build.java test
 
 Последнее отчаянное воззвание дельфинов показалось людям удивительно сложным двойным сальто через обруч с одновременным высвистыванием “Звездно-полосатого флага”. В действительности же, сообщение гласило: “Пока! И спасибо за рыбу”.
 
-## Test plan
+## План тестирования
 
-### App.parseConfig
+Проведем анализ функции App.parseConfig
 
-**Decision table:**
+**Таблица решений:**
 
-| Conditions                                                                   | 0   | 1   | 2   | 3   | 4   | 5   | 6   | 7   |
+| Условие                                                                      | 0   | 1   | 2   | 3   | 4   | 5   | 6   | 7   |
 | ---------------------------------------------------------------------------- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 3 args are provided                                                          |     |     |     |     | x   | x   | x   | x   |
-| First arg is a string with a positive integer                                |     | x   |     | x   |     |     | x   | x   |
-| Second arg is a case-insensitive string "true" or "false"                    |     |     | x   | x   |     | x   |     | x   |
-| Outputs                                                                      |     |     |     |     |     |     |     |     |
+| args содержит 3 элемента                                                     |     |     |     |     | x   | x   | x   | x   |
+| Первый элемента - положительное целое число                                  |     | x   |     | x   |     |     | x   | x   |
+| Второй элемента "true" или "false" (регистронезависимо)                      |     |     | x   | x   |     | x   |     | x   |
+| Эффект                                                                       |     |     |     |     |     |     |     |     |
 | IllegalArgumentException("Unexpected number of arguments, expect exactly 3") | x   | x   | x   | x   |     |     |     |     |
 | IllegalArgumentException("chat-message-limit must be a positive integer")    |     |     |     |     | x   | x   |     |     |
 | IllegalArgumentException("log-requests must be either 'true' or 'false'")    |     |     |     |     |     |     | x   |     |
-| Valid configuration object with corresponding values                         |     |     |     |     |     |     |     | x   |
+| Возвращается объект конфигурации с заданными значениями                      |     |     |     |     |     |     |     | x   |
 
-We can see that function "short-circuits" on the first validation error and there is no need for the further testing.
-Hence cases 0, 4, 6 and 7 provide full coverage of the possible output actions.
-Although to achieve a full coverage of all pathes we need to consider more variants of the arguments values.
+Функция выбрасывает ошибку при первом же некорректном аргументе, так что можно исключить комбинации из нескольких некорректных аргументов.
+Остаются тестовые случаи 0, 4, 6 и 7.
 
-Lets make a boundary values analysis:
+Однако, стоит также рассмотреть различные некорректные значения аргументов, чтобы исключить ситуации, когда в коде проверяется не весь диапазон значений:
 
 _args length:_
 
-| Value | Validation result |
-| ----- | ----------------- |
-| < 3   | Invalid           |
-| == 3  | Valid             |
-| > 3   | Invalid           |
+| Значение | Валидность |
+| -------- | ---------- |
+| < 3      | Невалидный |
+| == 3     | Валидный   |
+| > 3      | Невалидный |
 
 _chat-message-limit:_
 
-| Value          | Validation result |
-| -------------- | ----------------- |
-| Not an integer | Invalid           |
-| Integer <=0    | Invalid           |
-| Integer > 0    | Valid             |
+| Значение       | Валидность |
+| -------------- | ---------- |
+| Not an integer | Невалидный |
+| Integer <=0    | Невалидный |
+| Integer > 0    | Валидный   |
 
 _logRequests:_
 
-| Value                                  | Validation result |
-| -------------------------------------- | ----------------- |
-| "true", "True", "TrUe", "TRUE", ...    | Valid             |
-| "false", "False, "FaLsE", "FALSE", ... | Valid             |
-| Not a boolean string                   | Invalid           |
+| Значение                               | Валидность |
+| -------------------------------------- | ---------- |
+| "true", "True", "TrUe", "TRUE", ...    | Валидный   |
+| "false", "False, "FaLsE", "FALSE", ... | Валидный   |
+| Not a boolean string                   | Невалидный |
 
 _openai-api-key:_
 
-Technically might be an arbitrary string, but I prefer to have at least two different values of each output argument (`Config.openaiApiKey` in that case) to be sure it not hardcoded somewhere.
+Теоретически, это значение не влияет на поведение функции. Но стоит и здесь проверить несколько отличных значений, чтобы убедится, что в `Config.openaiApiKey` и вправду попадает переданное в функцию значение
 
-Summing up, test cases are:
+Итак, тестовые случаи:
 
 | Input                  | Output                                                                                   |
 | ---------------------- | ---------------------------------------------------------------------------------------- |
