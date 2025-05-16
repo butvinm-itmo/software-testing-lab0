@@ -36,35 +36,24 @@ java --enable-preview build.java test
 java --enable-preview build.java test-mutate
 ```
 
-## Test plan
+## План тестирования
 
-### Boundary values analysis
+### Анализ эквивалентности
 
 ![](./graph.png)
 
-Lets analyze both mathematical and programmatic behaviour of the function.
+Проанализируем поведение математической функции и ее программной реализации.
 
-Mathematical function has different behaviour on the following ranges:
+Поведение математической функции arctg на различных интервалах:
 
-| Range          | Behaviour                       |
-| -------------- | ------------------------------- |
-| \|x\| > 1      | Series does not converge        |
-| x = 0          | Series converge to 0            |
-| x >= -1, x < 0 | Series converge to arctg(x) < 0 |
-| x > 0, x < 1   | Series converge to arctg(x) > 0 |
+| Интервал     | Поведение математической функции        | Ожидаемое поведение программной реализации                         |
+| ------------ | --------------------------------------- | ------------------------------------------------------------------ |
+| \|x\| > 1    | Ряд не сходится                         | Функция возвращает ошибку IllegalArgumentException                 |
+| \|x\| <= 0.9 | Ряд быстро сходится к значению arctg(x) | Функция возвращает arctg(x)                                        |
+| x > 0, x < 1 | Ряд сходится к значению arctg(x) > 0    | Функция может превысить ITERATION_LIMIT и вернуть RuntimeException |
 
-From the programmatical point of view function has the following behaviour:
+### Property-based тестирования
 
-By **x**:
+Для тестирования математических функций хорошо подходит Property-based тестирование.
 
-| Range        | Behaviour                                                                                                                                        |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| \|x\| > 1    | Throws IllegalArgumentException("arctg series converges only for \|x\| <= 1") because otherwise would never stop                                 |
-| \|x\| <= 0.9 | Function evaluates fast, result is approximatelly arctg(x)                                                                                       |
-| \|x\| > 0.95 | Function evaluates slowly (in more than 10000 iterations), result is approximatelly arctg(x), may exceed ITERATION_LIMIT and throw RuntimeException |
-
-### Property based testing
-
-We can also test that our function actually satisfies its mathematical properties.
-
-For example we can verify that for any valid input arctg(x) == -arctg(-x).
+Проверим, что выполняется следующее свойство: $\arctan(x) == -\arctan(-x)$
